@@ -1,0 +1,23 @@
+# Data
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Submodule build artifacts
+submodules/*/build/
+submodules/*/*.egg-info/
+
+# Outputs / checkpoints
+output/
+wandb/
+
+# OS
+.DS_Store
