@@ -21,6 +21,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/sequence.h>
 #define __CUDACC__
+#include <cfloat>
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 
