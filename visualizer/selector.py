@@ -16,6 +16,7 @@ import numpy as np
 from .projector import project_gaussians
 
 DEFAULT_OPACITY_THRESHOLD = 0.2
+DEFAULT_LAYER_DECAY = 1.0
 DEFAULT_GRID_SIZE = 24
 
 
@@ -28,6 +29,7 @@ def select_surface_gaussians(
     aspect: float,
     screen_rect: tuple[float, float, float, float],
     opacity_threshold: float = DEFAULT_OPACITY_THRESHOLD,
+    layer_decay: float = DEFAULT_LAYER_DECAY,
     grid_size: int = DEFAULT_GRID_SIZE,
 ) -> np.ndarray:
     """Return a boolean mask of surface Gaussians within a screen rectangle.
@@ -42,8 +44,14 @@ def select_surface_gaussians(
         screen_rect:       (min_x, min_y, max_x, max_y) in [0, 1] screen
                            coords (OpenCV: 0,0 = upper-left).
         opacity_threshold: Cumulative alpha at which a column is considered
-                           opaque.  0.5 means include all Gaussians until
-                           90 % of the incoming light is blocked.
+                           opaque.  0.2 means stop once 20 % of incoming
+                           light is blocked.
+        layer_decay:       Per-layer multiplier applied to effective
+                           transmittance starting from the second Gaussian
+                           (1.0 = no penalty, 0.5 = halves each layer).
+                           The stop test becomes:
+                               transmittance * layer_decay^layer_idx <= stop
+                           so lower values prune deeper layers aggressively.
         grid_size:         Resolution of the coarse grid used for per-column
                            opacity accumulation.
 
@@ -104,8 +112,8 @@ def select_surface_gaussians(
 
         transmittance = 1.0
         stop_threshold = 1.0 - opacity_threshold
-        for rank_idx in sort_order:
-            if transmittance <= stop_threshold:
+        for layer_idx, rank_idx in enumerate(sort_order):
+            if transmittance * (layer_decay ** layer_idx) <= stop_threshold:
                 break
             selected_in_rect[cell_local_idx[rank_idx]] = True
             transmittance *= 1.0 - float(cell_opacities[rank_idx])

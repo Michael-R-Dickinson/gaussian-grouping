@@ -18,7 +18,11 @@ from scipy.spatial.transform import Rotation
 
 from .loader import DEFAULT_PLY, load_gaussians
 from .projector import camera_look_at_to_wxyz
-from .selector import select_surface_gaussians
+from .selector import (
+    DEFAULT_LAYER_DECAY,
+    DEFAULT_OPACITY_THRESHOLD,
+    select_surface_gaussians,
+)
 
 # Bear scene approximate centre derived from training camera coverage.
 _BEAR_SCENE_CENTER = np.array([0.0, 1.0, 3.0], dtype=np.float64)
@@ -112,6 +116,20 @@ class GaussianVisualizer:
             self._btn_clear = self._server.gui.add_button(
                 "Clear Selection", color="red"
             )
+            self._sld_opacity = self._server.gui.add_slider(
+                "Opacity threshold",
+                min=0.01,
+                max=0.99,
+                step=0.01,
+                initial_value=DEFAULT_OPACITY_THRESHOLD,
+            )
+            self._sld_layer_decay = self._server.gui.add_slider(
+                "Layer decay",
+                min=0.0,
+                max=1.0,
+                step=0.01,
+                initial_value=DEFAULT_LAYER_DECAY,
+            )
 
         with self._server.gui.add_folder("View"):
             self._btn_reset_camera = self._server.gui.add_button("Reset Camera")
@@ -189,6 +207,8 @@ class GaussianVisualizer:
                     event.screen_max[0],
                     event.screen_max[1],
                 ),
+                opacity_threshold=float(self._sld_opacity.value),
+                layer_decay=float(self._sld_layer_decay.value),
             )
             self._selected_mask |= new_sel
             count = int(np.sum(self._selected_mask))
