@@ -28,8 +28,11 @@ from .selector import (
 _BEAR_SCENE_CENTER = np.array([0.0, 1.0, 3.0], dtype=np.float64)
 _BEAR_CAMERA_DEFAULT_POS = np.array([0.0, 0.5, -4.5], dtype=np.float64)
 
-# Orange colour for selected Gaussians (float [0, 1]).
+# Highlight colours (float [0, 1]).
 _ORANGE = np.array([1.0, 0.5, 0.0], dtype=np.float32)
+_PURPLE = np.array([0.6, 0.0, 1.0], dtype=np.float32)
+
+DEFAULT_IDENTITY_SIMILARITY = 0.85
 
 
 class GaussianVisualizer:
@@ -41,14 +44,17 @@ class GaussianVisualizer:
 
         print(f"Loading Gaussians from {self._ply_path} …")
         data = load_gaussians(self._ply_path)
-        self._positions: np.ndarray = data["positions"]   # (N, 3)
-        self._opacities: np.ndarray = data["opacities"]   # (N,)
-        self._base_colors: np.ndarray = data["colors"]    # (N, 3) float [0,1]
-        self._covariances: np.ndarray = data["covariances"]  # (N, 3, 3)
+        self._positions: np.ndarray = data["positions"]     # (N, 3)
+        self._opacities: np.ndarray = data["opacities"]     # (N,)
+        self._base_colors: np.ndarray = data["colors"]      # (N, 3) float [0,1]
+        self._covariances: np.ndarray = data["covariances"] # (N, 3, 3)
+        self._identities: np.ndarray | None = data["identities"]  # (N, D) or None
         N = len(self._positions)
-        print(f"Loaded {N:,} Gaussians.")
+        id_dim = self._identities.shape[1] if self._identities is not None else 0
+        print(f"Loaded {N:,} Gaussians (identity encoding dim={id_dim}).")
 
         self._selected_mask: np.ndarray = np.zeros(N, dtype=bool)
+        self._object_mask: np.ndarray = np.zeros(N, dtype=bool)
         self._selection_mode: bool = False
 
         # Per-client camera-lock state (keyed by client_id).
@@ -90,10 +96,12 @@ class GaussianVisualizer:
         )
 
     def _update_colors(self) -> None:
-        """Push current colors (base + orange overlay for selected) to viser."""
+        """Push current colors to viser: purple for object match, orange for selection."""
         if self._splat_handle is None:
             return
         colors = self._base_colors.copy()
+        if np.any(self._object_mask):
+            colors[self._object_mask] = _PURPLE
         if np.any(self._selected_mask):
             colors[self._selected_mask] = _ORANGE
         self._splat_handle.rgbs = colors
@@ -129,6 +137,22 @@ class GaussianVisualizer:
                 max=1.0,
                 step=0.01,
                 initial_value=DEFAULT_LAYER_DECAY,
+            )
+            self._btn_select_object = self._server.gui.add_button(
+                "Select Object",
+                color="purple",
+                disabled=self._identities is None,
+            )
+            self._sld_identity_sim = self._server.gui.add_slider(
+                "Identity similarity",
+                min=0.0,
+                max=1.0,
+                step=0.01,
+                initial_value=DEFAULT_IDENTITY_SIMILARITY,
+                disabled=self._identities is None,
+            )
+            self._lbl_obj_count = self._server.gui.add_markdown(
+                "_Object match: **0** Gaussians_"
             )
 
         with self._server.gui.add_folder("View"):
@@ -167,7 +191,29 @@ class GaussianVisualizer:
         @self._btn_clear.on_click
         def _clear_selection(_) -> None:
             self._selected_mask[:] = False
+            self._object_mask[:] = False
             self._lbl_count.content = "_Selected: **0** Gaussians_"
+            self._lbl_obj_count.content = "_Object match: **0** Gaussians_"
+            self._update_colors()
+
+        @self._btn_select_object.on_click
+        def _select_object(_) -> None:
+            if self._identities is None:
+                return
+            if not np.any(self._selected_mask):
+                return
+            query = self._identities[self._selected_mask].mean(axis=0)
+            q_norm = np.linalg.norm(query)
+            if q_norm < 1e-8:
+                return
+            query = query / q_norm
+            norms = np.linalg.norm(self._identities, axis=1, keepdims=True)
+            normed = self._identities / np.where(norms > 1e-8, norms, 1.0)
+            sims = normed @ query  # (N,)
+            threshold = float(self._sld_identity_sim.value)
+            self._object_mask = sims >= threshold
+            count = int(np.sum(self._object_mask))
+            self._lbl_obj_count.content = f"_Object match: **{count:,}** Gaussians_"
             self._update_colors()
 
         @self._btn_reset_camera.on_click

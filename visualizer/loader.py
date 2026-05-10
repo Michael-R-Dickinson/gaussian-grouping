@@ -52,6 +52,16 @@ def load_gaussians(ply_path: str | Path = DEFAULT_PLY) -> dict:
 
     covariances = _compute_covariances(scales, rotations)
 
+    obj_props = sorted(
+        [p.name for p in ply["vertex"].properties if p.name.startswith("obj_dc_")],
+        key=lambda n: int(n.split("_")[-1]),
+    )
+    identities: np.ndarray | None = (
+        np.stack([v[p] for p in obj_props], axis=1).astype(np.float32)
+        if obj_props
+        else None
+    )
+
     return {
         "positions": positions,
         "opacities": opacities,
@@ -59,6 +69,7 @@ def load_gaussians(ply_path: str | Path = DEFAULT_PLY) -> dict:
         "covariances": covariances,
         "scales": scales,
         "rotations": rotations,
+        "identities": identities,  # (N, D) or None if PLY has no obj_dc fields
     }
 
 
