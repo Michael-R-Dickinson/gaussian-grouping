@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 import viser
+from scipy.spatial.transform import Rotation
 
 from .loader import DEFAULT_PLY, load_gaussians
 from .projector import camera_look_at_to_wxyz
@@ -114,6 +115,13 @@ class GaussianVisualizer:
 
         with self._server.gui.add_folder("View"):
             self._btn_reset_camera = self._server.gui.add_button("Reset Camera")
+            self._dd_up = self._server.gui.add_dropdown(
+                "World Up",
+                options=["+y", "-y", "+z", "-z", "+x", "-x"],
+                initial_value="+y",
+            )
+            self._btn_roll_left = self._server.gui.add_button("Roll Left 90°")
+            self._btn_roll_right = self._server.gui.add_button("Roll Right 90°")
 
     # ------------------------------------------------------------------
     # Callbacks
@@ -149,6 +157,18 @@ class GaussianVisualizer:
             for client in self._server.get_clients().values():
                 _set_default_camera(client)
 
+        @self._dd_up.on_update
+        def _on_up_change(event: viser.GuiUpdateEvent) -> None:
+            self._server.scene.set_up_direction(event.target.value)
+
+        @self._btn_roll_left.on_click
+        def _roll_left(_) -> None:
+            _roll_all_clients(self._server, -90.0)
+
+        @self._btn_roll_right.on_click
+        def _roll_right(_) -> None:
+            _roll_all_clients(self._server, +90.0)
+
         # Rectangle select (shift+drag).
         @self._server.scene.on_rect_select(modifier="shift")
         def _on_rect_select(event: viser.SceneRectSelectEvent) -> None:
@@ -181,7 +201,7 @@ class GaussianVisualizer:
             _set_default_camera(client)
 
             @client.camera.on_update
-            def _on_cam_update() -> None:
+            def _on_cam_update(_) -> None:
                 self._enforce_camera_lock(client)
 
     def _lock_camera(self, client: viser.ClientHandle) -> None:
@@ -214,6 +234,16 @@ class GaussianVisualizer:
             with self._lock_mutex:
                 if client.client_id in self._lock_state:
                     self._lock_state[client.client_id]["updating"] = False
+
+
+def _roll_all_clients(server: viser.ViserServer, angle_deg: float) -> None:
+    """Roll every connected client's camera around its view axis (local +Z)."""
+    roll = Rotation.from_rotvec([0.0, 0.0, np.deg2rad(angle_deg)])
+    for client in server.get_clients().values():
+        w, x, y, z = client.camera.wxyz
+        r_c2w = Rotation.from_quat([x, y, z, w])
+        q = (r_c2w * roll).as_quat()  # [x, y, z, w]
+        client.camera.wxyz = np.array([q[3], q[0], q[1], q[2]])
 
 
 def _set_default_camera(client: viser.ClientHandle) -> None:

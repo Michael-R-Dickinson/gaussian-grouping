@@ -15,7 +15,7 @@ import numpy as np
 
 from .projector import project_gaussians
 
-DEFAULT_OPACITY_THRESHOLD = 0.9
+DEFAULT_OPACITY_THRESHOLD = 0.2
 DEFAULT_GRID_SIZE = 24
 
 
@@ -42,7 +42,7 @@ def select_surface_gaussians(
         screen_rect:       (min_x, min_y, max_x, max_y) in [0, 1] screen
                            coords (OpenCV: 0,0 = upper-left).
         opacity_threshold: Cumulative alpha at which a column is considered
-                           opaque.  0.9 means include all Gaussians until
+                           opaque.  0.5 means include all Gaussians until
                            90 % of the incoming light is blocked.
         grid_size:         Resolution of the coarse grid used for per-column
                            opacity accumulation.
@@ -76,12 +76,16 @@ def select_surface_gaussians(
     rect_w = max(max_x - min_x, 1e-6)
     rect_h = max(max_y - min_y, 1e-6)
 
-    cell_x = np.floor(
-        (rect_screen[:, 0] - min_x) / rect_w * grid_size
-    ).astype(int).clip(0, grid_size - 1)
-    cell_y = np.floor(
-        (rect_screen[:, 1] - min_y) / rect_h * grid_size
-    ).astype(int).clip(0, grid_size - 1)
+    cell_x = (
+        np.floor((rect_screen[:, 0] - min_x) / rect_w * grid_size)
+        .astype(int)
+        .clip(0, grid_size - 1)
+    )
+    cell_y = (
+        np.floor((rect_screen[:, 1] - min_y) / rect_h * grid_size)
+        .astype(int)
+        .clip(0, grid_size - 1)
+    )
     cell_id = cell_y * grid_size + cell_x
 
     selected_in_rect = np.zeros(len(rect_indices), dtype=bool)
