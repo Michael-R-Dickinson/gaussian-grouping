@@ -22,11 +22,14 @@ from arguments import ModelParams, PipelineParams, OptimizationParams
 import wandb
 import json
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, use_wandb):
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, use_wandb, warm_start_ply=None):
     first_iter = 0
     prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
+    if warm_start_ply:
+        print("Warm-starting gaussians from existing point cloud: ", warm_start_ply)
+        gaussians.load_ply_foreign(warm_start_ply, scene.cameras_extent)
     gaussians.training_setup(opt)
     num_classes = dataset.num_classes
     print("Num classes: ",num_classes)
@@ -213,6 +216,7 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
+    parser.add_argument("--warm_start_ply", type=str, default = None, help="Warm-start geometry/appearance from an existing (non-grouping) 3DGS point_cloud.ply; identity encoding is randomly initialized.")
     # Add an argument for the configuration file
     parser.add_argument("--config_file", type=str, default="config.json", help="Path to the configuration file")
     parser.add_argument("--use_wandb", action='store_true', default=False, help="Use wandb to record loss value")
@@ -252,7 +256,7 @@ if __name__ == "__main__":
     # Start GUI server, configure and run training
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, args.use_wandb)
+    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, args.use_wandb, args.warm_start_ply)
 
     # All done
     print("\nTraining complete.")

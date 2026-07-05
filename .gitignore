@@ -1,5 +1,3 @@
-# Data
-data/
 
 # Python
 __pycache__/
@@ -11,13 +9,23 @@ dist/
 build/
 *.egg
 
+
+
+# Data
+data/
+
 # Submodule build artifacts
 submodules/*/build/
 submodules/*/*.egg-info/
 
 # Outputs / checkpoints
 output/
+outputs/
 wandb/
+pred.json
+Annotations/
+*.pt
+*.pth
 
 # OS
 .DS_Store
